@@ -1,6 +1,6 @@
 services:
   openstock:
-    image: docker.io/library/openstock:latest
+    image: docker.io/nicho267/openstock:latest
     extra_hosts:
       - "mongodb:host-gateway"
     ports:
