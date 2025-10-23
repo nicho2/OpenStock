@@ -4,11 +4,25 @@ import Image from "next/image";
 import {headers} from "next/headers";
 import {redirect} from "next/navigation";
 import {getAuth} from "@/lib/better-auth/auth";
+import {MissingMongoUriError} from "@/database/mongoose";
+
+type SessionResult = Awaited<ReturnType<typeof getAuth>> extends {
+    api: { getSession: (...args: any[]) => Promise<infer R> };
+} ? R : null;
 
 const Layout = async ({ children }: { children : React.ReactNode }) => {
+    let session: SessionResult | null = null;
 
-    const auth = await getAuth();
-    const session = await auth.api.getSession({headers: await headers()});
+    try {
+        const auth = await getAuth();
+        session = await auth.api.getSession({headers: await headers()});
+    } catch (error) {
+        if (error instanceof MissingMongoUriError) {
+            console.warn("Skipping session lookup during build: MongoDB URI is missing");
+        } else {
+            throw error;
+        }
+    }
 
     if (session?.user) redirect('/')
     return (

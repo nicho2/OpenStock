@@ -2,6 +2,13 @@ import mongoose from "mongoose";
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
+export class MissingMongoUriError extends Error {
+    constructor() {
+        super("MongoDB URI is missing");
+        this.name = "MissingMongoUriError";
+    }
+}
+
 declare global {
     var mongooseCache: {
         conn: typeof mongoose | null;
@@ -17,7 +24,7 @@ if (!cached){
 
 export const connectToDatabase = async () => {
     if(!MONGODB_URI){
-        throw new Error("MongoDB URI is missing");
+        throw new MissingMongoUriError();
     }
 
     if(cached.conn) return cached.conn;
