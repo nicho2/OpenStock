@@ -1,11 +1,27 @@
 import Header from "@/components/Header";
-import {auth} from "@/lib/better-auth/auth";
+import {getAuth} from "@/lib/better-auth/auth";
 import {headers} from "next/headers";
 import {redirect} from "next/navigation";
 import Footer from "@/components/Footer";
+import {MissingMongoUriError} from "@/database/mongoose";
+
+type SessionResult = Awaited<ReturnType<typeof getAuth>> extends {
+    api: { getSession: (...args: any[]) => Promise<infer R> };
+} ? R : null;
 
 const Layout = async ({ children }: { children : React.ReactNode }) => {
-    const session = await auth.api.getSession({ headers: await headers() });
+    let session: SessionResult | null = null;
+
+    try {
+        const auth = await getAuth();
+        session = await auth.api.getSession({ headers: await headers() });
+    } catch (error) {
+        if (error instanceof MissingMongoUriError) {
+            console.warn("Skipping session lookup during build: MongoDB URI is missing");
+        } else {
+            throw error;
+        }
+    }
 
     if(!session?.user) redirect('/sign-in');
 
