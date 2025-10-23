@@ -1,6 +1,10 @@
 # Use official Node.js 20 Alpine image as base
 FROM node:20-alpine
 
+# Accept MongoDB URI during build to satisfy server-side checks
+ARG MONGODB_URI
+ENV MONGODB_URI=${MONGODB_URI}
+
 # Set working directory
 WORKDIR /app
 
