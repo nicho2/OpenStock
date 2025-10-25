@@ -6,8 +6,18 @@ export async function middleware(request: NextRequest) {
 
     // Check cookie presence - prevents obviously unauthorized users
     if (!sessionCookie) {
+        console.info("[middleware] Missing session cookie, redirecting to /sign-in", {
+            path: request.nextUrl.pathname,
+            search: request.nextUrl.search,
+        });
         return NextResponse.redirect(new URL('/sign-in', request.url));
     }
+
+    console.info("[middleware] Session cookie detected, allowing request", {
+        path: request.nextUrl.pathname,
+        hasValue: Boolean(sessionCookie.value),
+        valuePreview: sessionCookie.value?.slice(0, 12),
+    });
 
     return NextResponse.next();
 }

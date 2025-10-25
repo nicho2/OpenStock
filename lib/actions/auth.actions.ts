@@ -6,13 +6,26 @@ import {cookies, headers} from "next/headers";
 import {parseSetCookieHeader} from "better-auth/cookies";
 
 const syncCookiesFromResponse = async (responseHeaders?: Headers | null) => {
-    if (!responseHeaders) return;
+    if (!responseHeaders) {
+        console.warn("[auth] syncCookiesFromResponse called without headers");
+        return;
+    }
 
     const setCookieHeader = responseHeaders.get("set-cookie");
-    if (!setCookieHeader) return;
+    if (!setCookieHeader) {
+        console.warn("[auth] Auth response did not include a set-cookie header", {
+            receivedHeaders: Object.fromEntries(responseHeaders.entries()),
+        });
+        return;
+    }
+
+    console.info("[auth] Received set-cookie header from auth response", setCookieHeader);
 
     const parsedCookies = parseSetCookieHeader(setCookieHeader);
-    if (!parsedCookies.size) return;
+    if (!parsedCookies.size) {
+        console.warn("[auth] Unable to parse set-cookie header from auth response");
+        return;
+    }
 
     const cookieStore = await cookies();
 
@@ -22,6 +35,14 @@ const syncCookiesFromResponse = async (responseHeaders?: Headers | null) => {
         const maxAge = value["max-age"] ? Number(value["max-age"]) : undefined;
 
         try {
+            console.info("[auth] Persisting auth cookie", {
+                key,
+                domain: value.domain,
+                path: value.path,
+                secure: value.secure,
+                sameSite: value.samesite,
+                maxAge,
+            });
             cookieStore.set(key, decodeURIComponent(value.value), {
                 httpOnly: value.httponly,
                 secure: value.secure,
@@ -30,10 +51,28 @@ const syncCookiesFromResponse = async (responseHeaders?: Headers | null) => {
                 domain: value.domain,
                 path: value.path,
             });
+            console.info("[auth] Auth cookie persisted successfully", key);
+
+            const storedCookie = cookieStore.get(key);
+            if (storedCookie) {
+                console.info("[auth] Cookie visible in server action store", {
+                    name: storedCookie.name,
+                    valuePreview: `${storedCookie.value.slice(0, 12)}…`,
+                });
+            } else {
+                console.warn("[auth] Cookie not readable immediately after persistence", key);
+            }
         } catch (error) {
             console.error(`Failed to persist auth cookie: ${key}`, error);
         }
     });
+
+    const serverCookies = cookieStore.getAll().map((cookie) => ({
+        name: cookie.name,
+        valuePreview: `${cookie.value.slice(0, 12)}…`,
+    }));
+
+    console.info("[auth] Cookies currently available in server action", serverCookies);
 };
 
 const cloneRequestHeaders = () => {
@@ -76,6 +115,7 @@ export const signUpWithEmail = async ({ email, password, fullName, country, inve
 
 export const signInWithEmail = async ({ email, password }: SignInFormData) => {
     try {
+        console.info("[auth] Starting sign-in flow", { email });
         const auth = await getAuth();
         const response = await auth.api.signInEmail({
             body: { email, password },
@@ -83,12 +123,17 @@ export const signInWithEmail = async ({ email, password }: SignInFormData) => {
             returnHeaders: true,
         })
 
+        console.info("[auth] Sign-in API call completed", {
+            status: response.response.status,
+            statusText: response.response.statusText,
+        });
+
         await syncCookiesFromResponse(response.headers);
 
         console.info("Sign in completed successfully for", email);
         return { success: true, data: response.response }
     } catch (e) {
-        console.log('Sign in failed', e)
+        console.error('[auth] Sign in failed', e)
         return { success: false, error: 'Sign in failed' }
     }
 }
@@ -105,7 +150,7 @@ export const signOut = async () => {
 
         console.info("Sign out completed successfully");
     } catch (e) {
-        console.log('Sign out failed', e)
+        console.error('[auth] Sign out failed', e)
         return { success: false, error: 'Sign out failed' }
     }
 }
