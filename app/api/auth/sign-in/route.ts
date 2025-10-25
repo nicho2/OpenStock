@@ -4,17 +4,43 @@ import { NextResponse } from "next/server";
 import { createResponseFromAuthResult } from "../utils";
 import { getAuth } from "@/lib/better-auth/auth";
 
+const normalizeRequestHeaders = (headers: Headers) => {
+    const result: Record<string, string> = {};
+
+    for (const [key, value] of headers.entries()) {
+        result[key] = value;
+    }
+
+    return result;
+};
+
+const sanitizeHeadersForLog = (headers: Record<string, string>) => {
+    const sanitized: Record<string, string> = {};
+    for (const [key, value] of Object.entries(headers)) {
+        sanitized[key] = key.toLowerCase() === "cookie" ? "[redacted]" : value;
+    }
+
+    return sanitized;
+};
+
 export async function POST(request: Request) {
     try {
         const auth = await getAuth();
         const body = await request.json();
 
+        const { email } = body ?? {};
+        console.info("[auth] Sign in request received", { email });
+
+        const normalizedHeaders = normalizeRequestHeaders(request.headers);
+        console.debug("[auth] Normalized request headers", sanitizeHeadersForLog(normalizedHeaders));
+
         const result = await auth.api.signInEmail({
             body,
-            headers: request.headers,
+            headers: normalizedHeaders,
             returnHeaders: true,
         });
 
+        console.info("[auth] Sign in successful", { email });
         return await createResponseFromAuthResult(result);
     } catch (error) {
         console.error("[auth] Sign in route failed", error);
