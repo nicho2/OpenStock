@@ -2,7 +2,50 @@
 
 import {getAuth} from "@/lib/better-auth/auth";
 import {inngest} from "@/lib/inngest/client";
-import {headers} from "next/headers";
+import {cookies, headers} from "next/headers";
+import {parseSetCookieHeader} from "better-auth/cookies";
+
+const syncCookiesFromResponse = async (responseHeaders?: Headers | null) => {
+    if (!responseHeaders) return;
+
+    const setCookieHeader = responseHeaders.get("set-cookie");
+    if (!setCookieHeader) return;
+
+    const parsedCookies = parseSetCookieHeader(setCookieHeader);
+    if (!parsedCookies.size) return;
+
+    const cookieStore = await cookies();
+
+    parsedCookies.forEach((value, key) => {
+        if (!key) return;
+
+        const maxAge = value["max-age"] ? Number(value["max-age"]) : undefined;
+
+        try {
+            cookieStore.set(key, decodeURIComponent(value.value), {
+                httpOnly: value.httponly,
+                secure: value.secure,
+                sameSite: value.samesite,
+                maxAge,
+                domain: value.domain,
+                path: value.path,
+            });
+        } catch (error) {
+            console.error(`Failed to persist auth cookie: ${key}`, error);
+        }
+    });
+};
+
+const cloneRequestHeaders = () => {
+    const incomingHeaders = headers();
+    const clonedHeaders = new Headers();
+
+    incomingHeaders.forEach((value, key) => {
+        clonedHeaders.set(key, value);
+    });
+
+    return clonedHeaders;
+};
 
 export const signUpWithEmail = async ({ email, password, fullName, country, investmentGoals, riskTolerance, preferredIndustry }: SignUpFormData) => {
     try {
@@ -23,7 +66,8 @@ export const signUpWithEmail = async ({ email, password, fullName, country, inve
             }
         }
 
-        return { success: true, data: response }
+        console.info("Sign up completed successfully for", email);
+        return { success: true, data: response.response }
     } catch (e) {
         console.log('Sign up failed', e)
         return { success: false, error: 'Sign up failed' }
@@ -38,7 +82,10 @@ export const signInWithEmail = async ({ email, password }: SignInFormData) => {
             headers: await headers(),
         })
 
-        return { success: true, data: response }
+        await syncCookiesFromResponse(response.headers);
+
+        console.info("Sign in completed successfully for", email);
+        return { success: true, data: response.response }
     } catch (e) {
         console.log('Sign in failed', e)
         return { success: false, error: 'Sign in failed' }
@@ -48,7 +95,14 @@ export const signInWithEmail = async ({ email, password }: SignInFormData) => {
 export const signOut = async () => {
     try {
         const auth = await getAuth();
-        await auth.api.signOut({ headers: await headers() });
+        const response = await auth.api.signOut({
+            headers: cloneRequestHeaders(),
+            returnHeaders: true,
+        });
+
+        await syncCookiesFromResponse(response.headers);
+
+        console.info("Sign out completed successfully");
     } catch (e) {
         console.log('Sign out failed', e)
         return { success: false, error: 'Sign out failed' }
