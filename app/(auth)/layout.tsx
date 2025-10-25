@@ -15,7 +15,8 @@ const Layout = async ({ children }: { children : React.ReactNode }) => {
 
     try {
         const auth = await getAuth();
-        session = await auth.api.getSession({headers: await headers()});
+        const headerList = headers();
+        session = await auth.api.getSession({ headers: Object.fromEntries(headerList.entries()) });
     } catch (error) {
         if (error instanceof MissingMongoUriError) {
             console.warn("Skipping session lookup during build: MongoDB URI is missing");

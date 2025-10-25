@@ -33,6 +33,7 @@ export const signUpWithEmail = async ({ email, password, fullName, country, inve
                 riskTolerance,
                 preferredIndustry,
             }),
+            credentials: "include",
         });
 
         if (!response.ok) {
@@ -55,6 +56,7 @@ export const signInWithEmail = async ({ email, password }: SignInFormData) => {
             method: "POST",
             headers: DEFAULT_HEADERS,
             body: JSON.stringify({ email, password }),
+            credentials: "include",
         });
 
         if (!response.ok) {
@@ -76,6 +78,7 @@ export const signOut = async () => {
         const response = await fetch("/api/auth/sign-out", {
             method: "POST",
             headers: DEFAULT_HEADERS,
+            credentials: "include",
         });
 
         if (!response.ok) {
