@@ -52,16 +52,6 @@ const syncCookiesFromResponse = async (responseHeaders?: Headers | null) => {
                 path: value.path,
             });
             console.info("[auth] Auth cookie persisted successfully", key);
-
-            const storedCookie = cookieStore.get(key);
-            if (storedCookie) {
-                console.info("[auth] Cookie visible in server action store", {
-                    name: storedCookie.name,
-                    valuePreview: `${storedCookie.value.slice(0, 12)}…`,
-                });
-            } else {
-                console.warn("[auth] Cookie not readable immediately after persistence", key);
-            }
         } catch (error) {
             console.error(`Failed to persist auth cookie: ${key}`, error);
         }

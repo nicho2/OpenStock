@@ -16,7 +16,6 @@ export async function middleware(request: NextRequest) {
     console.info("[middleware] Session cookie detected, allowing request", {
         path: request.nextUrl.pathname,
         hasValue: Boolean(sessionCookie.value),
-        valuePreview: sessionCookie.value?.slice(0, 12),
     });
 
     return NextResponse.next();
