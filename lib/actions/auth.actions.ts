@@ -56,6 +56,13 @@ const syncCookiesFromResponse = async (responseHeaders?: Headers | null) => {
             console.error(`Failed to persist auth cookie: ${key}`, error);
         }
     });
+
+    const serverCookies = cookieStore.getAll().map((cookie) => ({
+        name: cookie.name,
+        valuePreview: `${cookie.value.slice(0, 12)}…`,
+    }));
+
+    console.info("[auth] Cookies currently available in server action", serverCookies);
 };
 
 const cloneRequestHeaders = () => {
