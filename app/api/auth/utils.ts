@@ -47,13 +47,24 @@ const extractSetCookieFromHeadersInstance = (headers: Headers): string[] => {
     return values;
 };
 
+const logCookieExtraction = (source: string, cookies: string[]) => {
+    if (cookies.length === 0) {
+        console.info(`[auth] No Set-Cookie headers detected from ${source}`);
+        return;
+    }
+
+    console.info(`[auth] Detected ${cookies.length} Set-Cookie header(s) from ${source}`);
+};
+
 const extractSetCookieValues = (headers: HeadersLike): string[] => {
     if (!headers) {
         return [];
     }
 
     if (headers instanceof Headers) {
-        return extractSetCookieFromHeadersInstance(headers);
+        const cookies = extractSetCookieFromHeadersInstance(headers);
+        logCookieExtraction("Headers instance", cookies);
+        return cookies;
     }
 
     if (headers instanceof Map) {
@@ -62,13 +73,15 @@ const extractSetCookieValues = (headers: HeadersLike): string[] => {
 
     if (isRecord(headers)) {
         const entries = Object.entries(headers);
-        return entries.flatMap(([key, value]) => {
+        const cookies = entries.flatMap(([key, value]) => {
             if (key.toLowerCase() !== "set-cookie") {
                 return [];
             }
 
             return toStringArray(value);
         });
+        logCookieExtraction("record headers", cookies);
+        return cookies;
     }
 
     if (Array.isArray(headers)) {
@@ -79,6 +92,7 @@ const extractSetCookieValues = (headers: HeadersLike): string[] => {
                 cookies.push(...toStringArray(value));
             }
         }
+        logCookieExtraction("array headers", cookies);
         return cookies;
     }
 
@@ -90,6 +104,7 @@ const extractSetCookieValues = (headers: HeadersLike): string[] => {
                 cookies.push(...toStringArray(value));
             }
         }
+        logCookieExtraction("iterable headers", cookies);
         return cookies;
     }
 
@@ -106,6 +121,7 @@ const applySetCookieHeaders = (response: Response, cookies: string[]) => {
         return;
     }
 
+    console.info(`[auth] Applying ${uniqueCookies.length} Set-Cookie header(s) to response`);
     response.headers.delete("set-cookie");
     for (const cookie of uniqueCookies) {
         response.headers.append("set-cookie", cookie);
@@ -131,6 +147,10 @@ const buildResponse = (payload: unknown, init: ResponseInit & { headers?: Header
         response = new NextResponse(String(payload), finalInit);
     }
 
+    console.info(
+        "[auth] Built response",
+        JSON.stringify({ status: finalInit.status, statusText: finalInit.statusText, hasBody: payload !== null })
+    );
     applySetCookieHeaders(response, cookies);
     return response;
 };
@@ -160,9 +180,14 @@ export const createResponseFromAuthResult = async (result: {
     headers?: HeadersLike;
 }) => {
     const cookies: string[] = [];
+    console.info("[auth] Processing auth result headers for cookies");
     cookies.push(...extractSetCookieValues(result.headers));
 
     if (result.response instanceof Response) {
+        console.info(
+            "[auth] Received Response instance from auth result",
+            JSON.stringify({ status: result.response.status, statusText: result.response.statusText })
+        );
         cookies.push(...extractSetCookieValues(result.response.headers));
 
         const { body, contentType } = await readResponsePayload(result.response);
