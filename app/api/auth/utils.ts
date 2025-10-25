@@ -25,18 +25,42 @@ const toStringArray = (value: unknown): string[] => {
     return [];
 };
 
+const isHeadersInstance = (value: unknown): value is Headers => {
+    if (!value || typeof value !== "object") {
+        return false;
+    }
+
+    const candidate = value as Headers;
+    return (
+        typeof candidate.append === "function" &&
+        typeof candidate.delete === "function" &&
+        typeof candidate.entries === "function" &&
+        typeof candidate.forEach === "function" &&
+        typeof candidate.get === "function" &&
+        typeof candidate.has === "function"
+    );
+};
+
 const extractSetCookieFromHeadersInstance = (headers: Headers): string[] => {
     const getSetCookie = (headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
     if (typeof getSetCookie === "function") {
-        return getSetCookie();
+        try {
+            const cookies = getSetCookie.call(headers);
+            console.info("[auth] Extracted Set-Cookie headers via headers.getSetCookie()");
+            return cookies;
+        } catch (error) {
+            console.error("[auth] Failed to invoke headers.getSetCookie()", error);
+        }
     }
 
     const raw = (headers as Headers & { raw?: () => Record<string, unknown> }).raw?.();
     if (raw) {
+        console.info("[auth] Extracted Set-Cookie headers via headers.raw()");
         const value = raw["set-cookie"] ?? raw["Set-Cookie"];
         return toStringArray(value);
     }
 
+    console.info("[auth] Falling back to manual Set-Cookie header scan");
     const values: string[] = [];
     headers.forEach((value, key) => {
         if (key.toLowerCase() === "set-cookie" && typeof value === "string") {
@@ -61,7 +85,7 @@ const extractSetCookieValues = (headers: HeadersLike): string[] => {
         return [];
     }
 
-    if (headers instanceof Headers) {
+    if (isHeadersInstance(headers)) {
         const cookies = extractSetCookieFromHeadersInstance(headers);
         logCookieExtraction("Headers instance", cookies);
         return cookies;
