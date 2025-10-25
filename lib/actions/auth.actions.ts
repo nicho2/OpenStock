@@ -80,6 +80,7 @@ export const signInWithEmail = async ({ email, password }: SignInFormData) => {
         const response = await auth.api.signInEmail({
             body: { email, password },
             headers: await headers(),
+            returnHeaders: true,
         })
 
         await syncCookiesFromResponse(response.headers);
