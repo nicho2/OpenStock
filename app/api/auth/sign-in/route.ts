@@ -1,4 +1,7 @@
+import { APIError } from "better-call";
 import { NextResponse } from "next/server";
+
+import { createResponseFromAuthResult } from "../utils";
 import { getAuth } from "@/lib/better-auth/auth";
 
 export async function POST(request: Request) {
@@ -12,20 +15,15 @@ export async function POST(request: Request) {
             returnHeaders: true,
         });
 
-        const responsePayload = await result.response.json();
-        const response = NextResponse.json(responsePayload, {
-            status: result.response.status,
-            statusText: result.response.statusText,
-        });
-
-        const setCookie = result.headers?.get("set-cookie");
-        if (setCookie) {
-            response.headers.set("set-cookie", setCookie);
-        }
-
-        return response;
+        return await createResponseFromAuthResult(result);
     } catch (error) {
         console.error("[auth] Sign in route failed", error);
+        if (error instanceof APIError) {
+            const status = error.statusCode ?? 500;
+            const payload = error.body ?? { error: error.message ?? "Sign in failed" };
+            return NextResponse.json(payload, { status });
+        }
+
         return NextResponse.json({ error: "Sign in failed" }, { status: 500 });
     }
 }

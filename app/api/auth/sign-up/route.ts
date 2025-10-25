@@ -1,4 +1,7 @@
+import { APIError } from "better-call";
 import { NextResponse } from "next/server";
+
+import { createResponseFromAuthResult } from "../utils";
 import { getAuth } from "@/lib/better-auth/auth";
 import { inngest } from "@/lib/inngest/client";
 
@@ -26,20 +29,15 @@ export async function POST(request: Request) {
             console.warn("Skipping Inngest event 'app/user.created' because INNGEST_EVENT_KEY is not configured.");
         }
 
-        const responsePayload = await result.response.json();
-        const response = NextResponse.json(responsePayload, {
-            status: result.response.status,
-            statusText: result.response.statusText,
-        });
-
-        const setCookie = result.headers?.get("set-cookie");
-        if (setCookie) {
-            response.headers.set("set-cookie", setCookie);
-        }
-
-        return response;
+        return await createResponseFromAuthResult(result);
     } catch (error) {
         console.error("[auth] Sign up route failed", error);
+        if (error instanceof APIError) {
+            const status = error.statusCode ?? 500;
+            const payload = error.body ?? { error: error.message ?? "Sign up failed" };
+            return NextResponse.json(payload, { status });
+        }
+
         return NextResponse.json({ error: "Sign up failed" }, { status: 500 });
     }
 }
