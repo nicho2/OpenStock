@@ -1,147 +1,92 @@
-'use server';
-
-import {getAuth} from "@/lib/better-auth/auth";
-import {inngest} from "@/lib/inngest/client";
-import {cookies, headers} from "next/headers";
-import {parseSetCookieHeader} from "better-auth/cookies";
-
-const syncCookiesFromResponse = async (responseHeaders?: Headers | null) => {
-    if (!responseHeaders) {
-        console.warn("[auth] syncCookiesFromResponse called without headers");
-        return;
-    }
-
-    const setCookieHeader = responseHeaders.get("set-cookie");
-    if (!setCookieHeader) {
-        console.warn("[auth] Auth response did not include a set-cookie header", {
-            receivedHeaders: Object.fromEntries(responseHeaders.entries()),
-        });
-        return;
-    }
-
-    console.info("[auth] Received set-cookie header from auth response", setCookieHeader);
-
-    const parsedCookies = parseSetCookieHeader(setCookieHeader);
-    if (!parsedCookies.size) {
-        console.warn("[auth] Unable to parse set-cookie header from auth response");
-        return;
-    }
-
-    const cookieStore = await cookies();
-
-    parsedCookies.forEach((value, key) => {
-        if (!key) return;
-
-        const maxAge = value["max-age"] ? Number(value["max-age"]) : undefined;
-
-        try {
-            console.info("[auth] Persisting auth cookie", {
-                key,
-                domain: value.domain,
-                path: value.path,
-                secure: value.secure,
-                sameSite: value.samesite,
-                maxAge,
-            });
-            cookieStore.set(key, decodeURIComponent(value.value), {
-                httpOnly: value.httponly,
-                secure: value.secure,
-                sameSite: value.samesite,
-                maxAge,
-                domain: value.domain,
-                path: value.path,
-            });
-            console.info("[auth] Auth cookie persisted successfully", key);
-        } catch (error) {
-            console.error(`Failed to persist auth cookie: ${key}`, error);
-        }
-    });
-
-    const serverCookies = cookieStore.getAll().map((cookie) => ({
-        name: cookie.name,
-        valuePreview: `${cookie.value.slice(0, 12)}…`,
-    }));
-
-    console.info("[auth] Cookies currently available in server action", serverCookies);
+const DEFAULT_HEADERS = {
+    "Content-Type": "application/json",
 };
 
-const cloneRequestHeaders = () => {
-    const incomingHeaders = headers();
-    const clonedHeaders = new Headers();
-
-    incomingHeaders.forEach((value, key) => {
-        clonedHeaders.set(key, value);
-    });
-
-    return clonedHeaders;
-};
-
-export const signUpWithEmail = async ({ email, password, fullName, country, investmentGoals, riskTolerance, preferredIndustry }: SignUpFormData) => {
+const parseErrorMessage = async (response: Response) => {
     try {
-        const auth = await getAuth();
-        const response = await auth.api.signUpEmail({
-            body: { email, password, name: fullName },
-            headers: await headers(),
-        })
+        const payload = await response.json();
+        if (typeof payload?.error === "string") {
+            return payload.error;
+        }
+        if (typeof payload?.message === "string") {
+            return payload.message;
+        }
+    } catch (error) {
+        console.error("[auth] Failed to parse error response", error);
+    }
 
-        if(response) {
-            if (!process.env.INNGEST_EVENT_KEY) {
-                console.warn("Skipping Inngest event 'app/user.created' because INNGEST_EVENT_KEY is not configured.")
-            } else {
-                await inngest.send({
-                    name: 'app/user.created',
-                    data: { email, name: fullName, country, investmentGoals, riskTolerance, preferredIndustry }
-                })
-            }
+    return `${response.status} ${response.statusText}`.trim();
+};
+
+export const signUpWithEmail = async ({ email, password, fullName, country, investmentGoals, riskTolerance, preferredIndustry }:
+ SignUpFormData) => {
+    try {
+        const response = await fetch("/api/auth/sign-up", {
+            method: "POST",
+            headers: DEFAULT_HEADERS,
+            body: JSON.stringify({
+                email,
+                password,
+                fullName,
+                country,
+                investmentGoals,
+                riskTolerance,
+                preferredIndustry,
+            }),
+        });
+
+        if (!response.ok) {
+            const message = await parseErrorMessage(response);
+            return { success: false, error: message };
         }
 
+        const data = await response.json();
         console.info("Sign up completed successfully for", email);
-        return { success: true, data: response.response }
+        return { success: true, data };
     } catch (e) {
-        console.log('Sign up failed', e)
-        return { success: false, error: 'Sign up failed' }
+        console.error("[auth] Sign up request failed", e);
+        return { success: false, error: "Sign up failed" };
     }
-}
+};
 
 export const signInWithEmail = async ({ email, password }: SignInFormData) => {
     try {
-        console.info("[auth] Starting sign-in flow", { email });
-        const auth = await getAuth();
-        const response = await auth.api.signInEmail({
-            body: { email, password },
-            headers: await headers(),
-            returnHeaders: true,
-        })
-
-        console.info("[auth] Sign-in API call completed", {
-            status: response.response.status,
-            statusText: response.response.statusText,
+        const response = await fetch("/api/auth/sign-in", {
+            method: "POST",
+            headers: DEFAULT_HEADERS,
+            body: JSON.stringify({ email, password }),
         });
 
-        await syncCookiesFromResponse(response.headers);
+        if (!response.ok) {
+            const message = await parseErrorMessage(response);
+            return { success: false, error: message };
+        }
 
+        const data = await response.json();
         console.info("Sign in completed successfully for", email);
-        return { success: true, data: response.response }
+        return { success: true, data };
     } catch (e) {
-        console.error('[auth] Sign in failed', e)
-        return { success: false, error: 'Sign in failed' }
+        console.error("[auth] Sign in request failed", e);
+        return { success: false, error: "Sign in failed" };
     }
-}
+};
 
 export const signOut = async () => {
     try {
-        const auth = await getAuth();
-        const response = await auth.api.signOut({
-            headers: cloneRequestHeaders(),
-            returnHeaders: true,
+        const response = await fetch("/api/auth/sign-out", {
+            method: "POST",
+            headers: DEFAULT_HEADERS,
         });
 
-        await syncCookiesFromResponse(response.headers);
+        if (!response.ok) {
+            const message = await parseErrorMessage(response);
+            return { success: false, error: message };
+        }
 
         console.info("Sign out completed successfully");
+        return { success: true };
     } catch (e) {
-        console.error('[auth] Sign out failed', e)
-        return { success: false, error: 'Sign out failed' }
+        console.error("[auth] Sign out request failed", e);
+        return { success: false, error: "Sign out failed" };
     }
-}
-
+};
