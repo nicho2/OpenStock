@@ -52,11 +52,8 @@ export const signUpWithEmail = async ({ email, password, fullName, country, inve
         const auth = await getAuth();
         const response = await auth.api.signUpEmail({
             body: { email, password, name: fullName },
-            headers: cloneRequestHeaders(),
-            returnHeaders: true,
+            headers: await headers(),
         })
-
-        await syncCookiesFromResponse(response.headers);
 
         if(response) {
             if (!process.env.INNGEST_EVENT_KEY) {
@@ -82,8 +79,7 @@ export const signInWithEmail = async ({ email, password }: SignInFormData) => {
         const auth = await getAuth();
         const response = await auth.api.signInEmail({
             body: { email, password },
-            headers: cloneRequestHeaders(),
-            returnHeaders: true,
+            headers: await headers(),
         })
 
         await syncCookiesFromResponse(response.headers);
